@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SessionGuard — Vulnerability Report</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-primary:    #020812;
+      --bg-secondary:  #050e1f;
+      --bg-card:       #071428;
+      --border:        #0d2545;
+      --border-bright: #1a4080;
+      --cyan:          #00d4ff;
+      --cyan-dim:      #0099cc;
+      --green:         #00ff88;
+      --red:           #ff2d55;
+      --orange:        #ff6b35;
+      --yellow:        #ffd60a;
+      --text-primary:  #e8f4ff;
+      --text-secondary:#7aa0c4;
+      --text-dim:      #3a5a7c;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Exo 2', sans-serif;
+      min-height: 100vh;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.02) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    nav {
+      position: relative; z-index: 10;
+      background: rgba(2,8,18,0.9);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      padding: 0 2rem;
+      height: 60px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .nav-logo {
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700; font-size: 1.4rem;
+      letter-spacing: 2px; color: var(--cyan);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .logo-icon {
+      width: 32px; height: 32px; border: 2px solid var(--cyan);
+      border-radius: 6px; display: flex; align-items: center;
+      justify-content: center; font-size: 14px;
+    }
+    .nav-links { display: flex; gap: 2rem; align-items: center; }
+    .nav-links a {
+      color: var(--text-secondary); text-decoration: none;
+      font-size: 0.85rem; letter-spacing: 1px; text-transform: uppercase;
+      transition: color 0.2s; font-family: 'Rajdhani', sans-serif; font-weight: 500;
+    }
+    .nav-links a:hover, .nav-links a.active { color: var(--cyan); }
+
+    .main { position: relative; z-index: 5; padding: 2rem; max-width: 1100px; margin: 0 auto; }
+
+    /* ── Report Header ─── */
+    .report-header {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .report-header::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--cyan), #0066ff, var(--cyan));
+    }
+
+    .report-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .meta-item { }
+    .meta-key {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 2px;
+      margin-bottom: 4px;
+    }
+    .meta-val {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.85rem; color: var(--text-primary);
+      word-break: break-all;
+    }
+
+    /* ── Executive Summary ─── */
+    .exec-summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    @media(max-width:700px){ .exec-summary{ grid-template-columns:1fr; } }
+
+    .exec-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-align: center;
+    }
+
+    .exec-number {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 3rem; line-height: 1;
+      font-weight: 700; margin-bottom: 6px;
+    }
+
+    .exec-label {
+      font-size: 0.8rem; color: var(--text-secondary);
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+
+    /* ── Finding Cards ─── */
+    .finding-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+    .finding-card:hover { border-color: var(--border-bright); }
+
+    .finding-card.HIGH   { border-left: 3px solid var(--red); }
+    .finding-card.MEDIUM { border-left: 3px solid var(--orange); }
+    .finding-card.LOW    { border-left: 3px solid var(--yellow); }
+    .finding-card.INFO   { border-left: 3px solid var(--cyan); }
+
+    .finding-header {
+      padding: 14px 18px;
+      display: flex; align-items: center; gap: 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .finding-num {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem; color: var(--text-dim);
+      min-width: 28px;
+    }
+
+    .finding-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 1rem; font-weight: 600;
+      color: var(--text-primary); flex: 1;
+    }
+
+    .sev-badge {
+      padding: 3px 10px; border-radius: 3px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem; font-weight: bold;
+      letter-spacing: 1px; flex-shrink: 0;
+    }
+    .sev-HIGH   { background:rgba(255,45,85,0.15);  color:var(--red);    border:1px solid rgba(255,45,85,0.3); }
+    .sev-MEDIUM { background:rgba(255,107,53,0.15); color:var(--orange); border:1px solid rgba(255,107,53,0.3); }
+    .sev-LOW    { background:rgba(255,214,10,0.1);  color:var(--yellow); border:1px solid rgba(255,214,10,0.2); }
+    .sev-INFO   { background:rgba(0,212,255,0.1);   color:var(--cyan);   border:1px solid rgba(0,212,255,0.2); }
+
+    .finding-toggle {
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--text-dim); font-size: 0.8rem;
+      transition: transform 0.2s;
+    }
+    .finding-toggle.open { transform: rotate(180deg); }
+
+    .finding-body {
+      padding: 0 18px 18px;
+      display: none;
+    }
+    .finding-body.open { display: block; }
+
+    .finding-section {
+      margin-bottom: 14px;
+    }
+
+    .section-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem; color: var(--cyan-dim);
+      text-transform: uppercase; letter-spacing: 2px;
+      margin-bottom: 6px;
+    }
+
+    .section-text {
+      font-size: 0.85rem; color: var(--text-secondary);
+      line-height: 1.7;
+    }
+
+    .remediation-box {
+      background: rgba(0,255,136,0.04);
+      border: 1px solid rgba(0,255,136,0.15);
+      border-radius: 6px;
+      padding: 12px 16px;
+    }
+
+    .owasp-box {
+      background: rgba(0,212,255,0.04);
+      border: 1px solid rgba(0,212,255,0.15);
+      border-radius: 6px;
+      padding: 8px 14px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--cyan);
+      display: inline-block;
+    }
+
+    /* ── Tabulated Output ─── */
+    .tabulated-output {
+      background: rgba(0,0,0,0.5);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      overflow-x: auto;
+      white-space: pre;
+      line-height: 1.4;
+    }
+
+    /* ── Print / Export ─── */
+    .export-btn {
+      background: rgba(0,212,255,0.08);
+      border: 1px solid var(--border-bright);
+      color: var(--cyan);
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 600; font-size: 0.85rem;
+      letter-spacing: 1px; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .export-btn:hover { background: rgba(0,212,255,0.15); }
+
+    @media print {
+      .finding-body { display: block !important; }
+      nav, .export-btn { display: none !important; }
+      body { background: white; color: black; }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-logo">
+      <div class="logo-icon">⬡</div>
+      SESSION<span style="color:var(--text-secondary)">GUARD</span>
+    </div>
+    <div class="nav-links">
+      <a href="/">Scanner</a>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/report" class="active">Report</a>
+    </div>
+  </nav>
+
+  <main class="main" id="main-content">
+    <div style="text-align:center;padding:4rem;color:var(--text-dim);font-family:'Share Tech Mono',monospace;">
+      Loading report...
+    </div>
+  </main>
+
+  <script>
+    const raw  = sessionStorage.getItem('scanResult');
+    const data = raw ? JSON.parse(raw) : null;
+
+    if (!data) {
+      document.getElementById('main-content').innerHTML = `
+        <div style="text-align:center;padding:4rem;color:var(--text-dim);font-family:'Share Tech Mono',monospace;">
+          <div style="font-size:2rem;margin-bottom:12px;">🛡</div>
+          No scan data found. <a href="/" style="color:var(--cyan);">Run a scan first →</a>
+        </div>`;
+    } else {
+      renderReport(data);
+    }
+
+    function renderReport(d) {
+      const summary  = d.summary  || {};
+      const findings = d.findings || [];
+      const riskColor = summary.overall_risk === 'CRITICAL' ? '#ff2d55'
+                      : summary.overall_risk === 'HIGH'     ? '#ff6b35'
+                      : summary.overall_risk === 'MEDIUM'   ? '#ffd60a' : '#00ff88';
+
+      const scanDate = new Date().toLocaleString('en-US', {
+        year: 'numeric', month: 'short', day: '2-digit',
+        hour: '2-digit', minute: '2-digit',
+      });
+
+      const high   = findings.filter(f => f.severity === 'HIGH');
+      const medium = findings.filter(f => f.severity === 'MEDIUM');
+      const low    = findings.filter(f => f.severity === 'LOW');
+      const allSorted = [...high, ...medium, ...low];
+
+      const main = document.getElementById('main-content');
+      main.innerHTML = `
+
+        <!-- Report Header -->
+        <div class="report-header">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:1rem;">
+            <div>
+              <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:var(--text-dim); letter-spacing:3px; text-transform:uppercase; margin-bottom:6px;">
+                SECURITY ASSESSMENT REPORT
+              </div>
+              <h1 style="font-family:'Rajdhani',sans-serif; font-size:2rem; font-weight:700; color:var(--text-primary);">
+                Session Hijacking Vulnerability Report
+              </h1>
+              <div style="font-family:'Share Tech Mono',monospace; font-size:0.8rem; color:var(--text-secondary); margin-top:6px;">
+                Target: ${escHtml(d.url)} · Scanned: ${scanDate}
+              </div>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button class="export-btn" onclick="window.print()">🖨 Print Report</button>
+              <a href="/dashboard" style="display:inline-block;" class="export-btn">← Dashboard</a>
+            </div>
+          </div>
+
+          <div class="report-meta-grid">
+            <div class="meta-item">
+              <div class="meta-key">Target URL</div>
+              <div class="meta-val">${escHtml(d.url)}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-key">Protocol</div>
+              <div class="meta-val" style="color:${d.url.startsWith('https') ? 'var(--green)' : 'var(--red)'}">
+                ${d.url.startsWith('https') ? '🔒 HTTPS' : '⚠ HTTP (INSECURE)'}
+              </div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-key">SSL Certificate</div>
+              <div class="meta-val" style="color:${d.ssl?.valid ? 'var(--green)' : 'var(--red)'}">
+                ${d.ssl?.valid ? '✓ Valid' : d.ssl?.has_ssl ? '⚠ Invalid' : '✗ None'}
+              </div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-key">HTTP Status</div>
+              <div class="meta-val">${d.status_code || '—'}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-key">Cookies Found</div>
+              <div class="meta-val">${summary.total_cookies} (${summary.session_cookies} session)</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-key">Overall Risk</div>
+              <div class="meta-val" style="color:${riskColor};">
+                ${summary.overall_risk} (${summary.overall_score}/100)
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Executive Summary -->
+        <h2 style="font-family:'Rajdhani',sans-serif; font-size:1.1rem; letter-spacing:2px; text-transform:uppercase; color:var(--text-secondary); margin-bottom:1rem;">
+          Executive Summary
+        </h2>
+        <div class="exec-summary">
+          <div class="exec-card">
+            <div class="exec-number" style="color:var(--red)">${high.length}</div>
+            <div class="exec-label">High Severity</div>
+            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px;">Immediate action required</div>
+          </div>
+          <div class="exec-card">
+            <div class="exec-number" style="color:var(--orange)">${medium.length}</div>
+            <div class="exec-label">Medium Severity</div>
+            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px;">Address within 30 days</div>
+          </div>
+          <div class="exec-card">
+            <div class="exec-number" style="color:var(--yellow)">${low.length}</div>
+            <div class="exec-label">Low Severity</div>
+            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:6px;">Address in next sprint</div>
+          </div>
+        </div>
+
+        <!-- Findings -->
+        <h2 style="font-family:'Rajdhani',sans-serif; font-size:1.1rem; letter-spacing:2px; text-transform:uppercase; color:var(--text-secondary); margin-bottom:1rem;">
+          Detailed Findings (${allSorted.length} Issues)
+        </h2>
+
+        ${allSorted.length ? allSorted.map((f, i) => `
+          <div class="finding-card ${f.severity}" id="finding-${i}">
+            <div class="finding-header" onclick="toggleFinding(${i})">
+              <span class="finding-num">${String(i+1).padStart(2,'0')}</span>
+              <span class="finding-title">${escHtml(f.check)}</span>
+              <span class="sev-badge sev-${f.severity}">${f.severity}</span>
+              <span class="finding-toggle" id="toggle-${i}">▼</span>
+            </div>
+            <div class="finding-body" id="body-${i}">
+              <div class="finding-section">
+                <div class="section-label">Description</div>
+                <div class="section-text">${escHtml(f.description)}</div>
+              </div>
+              <div class="finding-section">
+                <div class="section-label">Remediation</div>
+                <div class="remediation-box">
+                  <div class="section-text" style="color:var(--green);">${escHtml(f.remediation)}</div>
+                </div>
+              </div>
+              <div class="finding-section">
+                <div class="section-label">Reference</div>
+                <div class="owasp-box">${escHtml(f.owasp)}</div>
+              </div>
+            </div>
+          </div>
+        `).join('') : `
+          <div style="text-align:center;padding:3rem;color:var(--green);font-family:'Share Tech Mono',monospace;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;">
+            ✓ No vulnerabilities detected — This target appears to be well-configured!
+          </div>
+        `}
+
+        <!-- Tabulated Output Section -->
+        <h2 style="font-family:'Rajdhani',sans-serif; font-size:1.1rem; letter-spacing:2px; text-transform:uppercase; color:var(--text-secondary); margin-top:2rem; margin-bottom:1rem;">
+          Tabulated Analysis Output
+        </h2>
+
+        <div style="margin-bottom:1rem;">
+          <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:var(--text-dim); margin-bottom:8px;">COOKIE SECURITY FLAGS</div>
+          <div class="tabulated-output">${escHtml(d.tabulated_cookies || 'No data')}</div>
+        </div>
+
+        <div style="margin-bottom:2rem;">
+          <div style="font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:var(--text-dim); margin-bottom:8px;">SESSION VULNERABILITY FINDINGS</div>
+          <div class="tabulated-output">${escHtml(d.tabulated_findings || 'No data')}</div>
+        </div>
+
+        <!-- OWASP References -->
+        <div style="background:var(--bg-card); border:1px solid var(--border); border-radius:8px; padding:1.5rem; margin-bottom:2rem;">
+          <h3 style="font-family:'Rajdhani',sans-serif; font-size:1rem; letter-spacing:2px; text-transform:uppercase; color:var(--text-secondary); margin-bottom:1rem;">
+            OWASP Testing Guide References
+          </h3>
+          <div style="display:grid; gap:8px; font-family:'Share Tech Mono',monospace; font-size:0.75rem; color:var(--text-secondary);">
+            ${[
+              ['WSTG-SESS-01', 'Testing for Session Management Schema — Verify session token randomness and unpredictability'],
+              ['WSTG-SESS-02', 'Testing for Cookies Attributes — Verify HttpOnly, Secure, SameSite flags'],
+              ['WSTG-SESS-03', 'Testing for Session Fixation — Verify session ID regeneration post-authentication'],
+              ['WSTG-SESS-06', 'Testing for Logout Functionality — Ensure server-side session invalidation'],
+              ['WSTG-SESS-07', 'Testing Session Timeout — Verify idle and absolute timeout enforcement'],
+              ['WSTG-SESS-08', 'Testing for Session Puzzling — Verify session variable misuse protections'],
+            ].map(([ref, desc]) => `
+              <div style="padding:10px; background:rgba(0,212,255,0.03); border-radius:4px; border:1px solid var(--border);">
+                <span style="color:var(--cyan);">${ref}</span>
+                <span style="color:var(--text-dim); margin:0 8px;">—</span>
+                <span>${escHtml(desc)}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function toggleFinding(i) {
+      const body   = document.getElementById('body-' + i);
+      const toggle = document.getElementById('toggle-' + i);
+      const isOpen = body.classList.contains('open');
+      body.classList.toggle('open', !isOpen);
+      toggle.classList.toggle('open', !isOpen);
+    }
+
+    function escHtml(str) {
+      if (str === null || str === undefined) return '—';
+      return String(str)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+  </script>
+</body>
+</html>

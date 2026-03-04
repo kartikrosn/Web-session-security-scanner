@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SessionGuard — Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-primary:    #020812;
+      --bg-secondary:  #050e1f;
+      --bg-card:       #071428;
+      --border:        #0d2545;
+      --border-bright: #1a4080;
+      --cyan:          #00d4ff;
+      --cyan-dim:      #0099cc;
+      --green:         #00ff88;
+      --red:           #ff2d55;
+      --orange:        #ff6b35;
+      --yellow:        #ffd60a;
+      --text-primary:  #e8f4ff;
+      --text-secondary:#7aa0c4;
+      --text-dim:      #3a5a7c;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Exo 2', sans-serif;
+      min-height: 100vh;
+    }
+
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.02) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    nav {
+      position: relative; z-index: 10;
+      background: rgba(2, 8, 18, 0.9);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      padding: 0 2rem;
+      height: 60px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .nav-logo {
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700; font-size: 1.4rem;
+      letter-spacing: 2px; color: var(--cyan);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .nav-logo .logo-icon {
+      width: 32px; height: 32px;
+      border: 2px solid var(--cyan); border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+    }
+    .nav-links { display: flex; gap: 2rem; align-items: center; }
+    .nav-links a { color: var(--text-secondary); text-decoration: none;
+      font-size: 0.85rem; letter-spacing: 1px; text-transform: uppercase;
+      transition: color 0.2s; font-family: 'Rajdhani', sans-serif; font-weight: 500; }
+    .nav-links a:hover, .nav-links a.active { color: var(--cyan); }
+
+    .main { position: relative; z-index: 5; padding: 1.5rem 2rem; }
+
+    /* ── Dashboard Header ─── */
+    .dash-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+    }
+
+    .target-info h2 {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 1.5rem; font-weight: 600;
+      color: var(--text-primary); margin-bottom: 4px;
+    }
+
+    .target-meta {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem; color: var(--text-dim);
+      display: flex; gap: 16px; flex-wrap: wrap;
+    }
+
+    .target-meta span { display: flex; align-items: center; gap: 4px; }
+
+    .risk-badge {
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      border: 1px solid currentColor;
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+    }
+
+    .risk-badge .risk-score { font-size: 1.8rem; line-height: 1; }
+
+    /* ── Stats Grid ─── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 1.5rem;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      padding: 1.2rem 1.5rem;
+      position: relative;
+    }
+
+    .stat-card::after {
+      content: '';
+      position: absolute; bottom: 0; left: 0; right: 0;
+      height: 2px;
+    }
+    .stat-card.cyan::after  { background: var(--cyan); }
+    .stat-card.red::after   { background: var(--red); }
+    .stat-card.orange::after{ background: var(--orange); }
+    .stat-card.yellow::after{ background: var(--yellow); }
+    .stat-card.green::after { background: var(--green); }
+
+    .stat-value {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 2.2rem; line-height: 1;
+      margin-bottom: 4px;
+    }
+    .stat-label {
+      font-size: 0.72rem; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+    .stat-sub {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem; color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    /* ── Charts Row ─── */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 900px) { .charts-row { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .card-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: 0.85rem; font-weight: 600;
+      letter-spacing: 1px; text-transform: uppercase;
+      color: var(--text-secondary);
+    }
+
+    .card-body { padding: 18px; }
+
+    /* ── Cookie Table ─── */
+    .cookie-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      font-family: 'Share Tech Mono', monospace;
+    }
+
+    .cookie-table th {
+      text-align: left;
+      padding: 8px 12px;
+      background: rgba(0,212,255,0.04);
+      color: var(--text-dim);
+      font-weight: 600;
+      letter-spacing: 1px;
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .cookie-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(13,37,69,0.5);
+      color: var(--text-secondary);
+    }
+
+    .cookie-table tr:hover td { background: rgba(0,212,255,0.02); }
+
+    .flag {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px;
+      border-radius: 3px;
+      font-size: 0.8rem; font-weight: bold;
+    }
+    .flag.ok   { background: rgba(0,255,136,0.1); color: var(--green); }
+    .flag.fail { background: rgba(255,45,85,0.1);  color: var(--red); }
+
+    .sev-badge {
+      padding: 2px 8px; border-radius: 3px;
+      font-size: 0.65rem; font-weight: bold;
+      letter-spacing: 1px;
+    }
+    .sev-HIGH   { background: rgba(255,45,85,0.15);  color: var(--red);    border: 1px solid rgba(255,45,85,0.3); }
+    .sev-MEDIUM { background: rgba(255,107,53,0.15); color: var(--orange); border: 1px solid rgba(255,107,53,0.3); }
+    .sev-LOW    { background: rgba(255,214,10,0.1);  color: var(--yellow); border: 1px solid rgba(255,214,10,0.2); }
+    .sev-INFO   { background: rgba(0,212,255,0.1);   color: var(--cyan);   border: 1px solid rgba(0,212,255,0.2); }
+
+    /* ── Findings Table ─── */
+    .findings-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+    }
+
+    .findings-table th {
+      text-align: left; padding: 10px 16px;
+      background: rgba(0,212,255,0.04);
+      color: var(--text-dim);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem; font-weight: 600;
+      letter-spacing: 1px; text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .findings-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    .findings-table tr:hover td { background: rgba(0,212,255,0.02); }
+
+    .vuln-name {
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 600; font-size: 0.9rem;
+      color: var(--text-primary);
+      margin-bottom: 3px;
+    }
+
+    .vuln-desc {
+      font-size: 0.78rem; color: var(--text-secondary);
+      line-height: 1.5; max-width: 500px;
+    }
+
+    .owasp-ref {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem; color: var(--cyan-dim);
+      background: rgba(0,212,255,0.06);
+      padding: 2px 8px; border-radius: 3px;
+      display: inline-block; margin-top: 4px;
+    }
+
+    .remediation-text {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ── Headers Panel ─── */
+    .header-item {
+      display: flex; justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(13,37,69,0.5);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      gap: 12px;
+    }
+    .header-key   { color: var(--cyan-dim); flex-shrink: 0; }
+    .header-value { color: var(--text-secondary); text-align: right; word-break: break-all; }
+
+    /* New scan button */
+    .new-scan-btn {
+      background: rgba(0,212,255,0.08);
+      border: 1px solid var(--border-bright);
+      color: var(--cyan);
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 600;
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .new-scan-btn:hover { background: rgba(0,212,255,0.15); }
+
+    .report-btn {
+      background: rgba(0,255,136,0.08);
+      border: 1px solid rgba(0,255,136,0.2);
+      color: var(--green);
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 600;
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+    .report-btn:hover { background: rgba(0,255,136,0.15); }
+
+    .no-data {
+      text-align: center; padding: 3rem;
+      color: var(--text-dim);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.85rem;
+    }
+
+    .demo-banner {
+      background: rgba(255,214,10,0.08);
+      border: 1px solid rgba(255,214,10,0.2);
+      border-radius: 6px;
+      padding: 10px 16px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--yellow);
+      margin-bottom: 1.5rem;
+      display: flex; align-items: center; gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-logo">
+      <div class="logo-icon">⬡</div>
+      SESSION<span style="color:var(--text-secondary)">GUARD</span>
+    </div>
+    <div class="nav-links">
+      <a href="/">Scanner</a>
+      <a href="/dashboard" class="active">Dashboard</a>
+      <a href="/report">Report</a>
+    </div>
+  </nav>
+
+  <main class="main" id="main-content">
+    <div class="no-data" id="loading-state">
+      <div style="margin-bottom:12px;">⟳ Loading scan results...</div>
+    </div>
+  </main>
+
+  <script>
+    // ─────────────────────────────────────────
+    // Load scan result from sessionStorage
+    // ─────────────────────────────────────────
+    const raw = sessionStorage.getItem('scanResult');
+    const data = raw ? JSON.parse(raw) : null;
+
+    if (!data) {
+      document.getElementById('loading-state').innerHTML = `
+        <div style="margin-bottom:16px; font-size:2rem;">🛡</div>
+        <div style="margin-bottom:8px; color:var(--text-secondary);">No scan results found.</div>
+        <a href="/" class="new-scan-btn" style="margin-top:12px; display:inline-flex;">← Run a Scan</a>
+      `;
+    } else {
+      renderDashboard(data);
+    }
+
+    // ─────────────────────────────────────────
+    // Render full dashboard
+    // ─────────────────────────────────────────
+    function renderDashboard(d) {
+      const summary  = d.summary || {};
+      const cookies  = d.cookies?.cookies || [];
+      const findings = d.findings || [];
+      const headers  = d.headers  || {};
+      const ssl      = d.ssl      || {};
+      const meta     = d.meta     || {};
+
+      const riskColor = summary.overall_risk === 'CRITICAL' ? '#ff2d55'
+                      : summary.overall_risk === 'HIGH'     ? '#ff6b35'
+                      : summary.overall_risk === 'MEDIUM'   ? '#ffd60a'
+                      : '#00ff88';
+
+      const main = document.getElementById('main-content');
+      main.innerHTML = `
+
+        ${d.is_demo ? `<div class="demo-banner">⚡ DEMO MODE — Showing simulated vulnerable application results for demonstration purposes.</div>` : ''}
+
+        <!-- Header -->
+        <div class="dash-header">
+          <div class="target-info">
+            <h2>${escHtml(d.hostname || d.url)}</h2>
+            <div class="target-meta">
+              <span>🌐 ${escHtml(d.url)}</span>
+              <span>⏱ ${d.scan_time}s</span>
+              <span>↪ ${d.redirect_count} redirects</span>
+              <span>📄 HTTP ${d.status_code || '—'}</span>
+              <span>${ssl.valid ? '🔒 SSL Valid' : ssl.has_ssl ? '⚠ SSL Invalid' : '🔓 No SSL'}</span>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap;">
+            <div class="risk-badge" style="color:${riskColor}">
+              <div class="risk-score">${summary.overall_score}</div>
+              <div style="font-size:0.7rem;">${summary.overall_risk} RISK</div>
+            </div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <a href="/" class="new-scan-btn">← New Scan</a>
+              <a href="/report" class="report-btn">📋 Full Report</a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card cyan">
+            <div class="stat-value" style="color:var(--cyan)">${summary.total_cookies}</div>
+            <div class="stat-label">Total Cookies</div>
+            <div class="stat-sub">${summary.session_cookies} session cookies</div>
+          </div>
+          <div class="stat-card red">
+            <div class="stat-value" style="color:var(--red)">${summary.vulnerable_cookies}</div>
+            <div class="stat-label">Vulnerable Cookies</div>
+          </div>
+          <div class="stat-card orange">
+            <div class="stat-value" style="color:var(--orange)">${summary.total_findings}</div>
+            <div class="stat-label">Total Findings</div>
+          </div>
+          <div class="stat-card red">
+            <div class="stat-value" style="color:var(--red)">${summary.high_count}</div>
+            <div class="stat-label">High Severity</div>
+          </div>
+          <div class="stat-card yellow">
+            <div class="stat-value" style="color:var(--yellow)">${summary.medium_count}</div>
+            <div class="stat-label">Medium Severity</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-value" style="color:var(--green)">${summary.low_count}</div>
+            <div class="stat-label">Low Severity</div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="charts-row">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Severity Distribution</span>
+            </div>
+            <div class="card-body" style="height:220px; display:flex; align-items:center; justify-content:center;">
+              <canvas id="donut-chart"></canvas>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Cookie Security Flags</span>
+            </div>
+            <div class="card-body" style="height:220px; display:flex; align-items:center; justify-content:center;">
+              <canvas id="bar-chart"></canvas>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Risk Gauge</span>
+            </div>
+            <div class="card-body" style="height:220px; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:12px;">
+              <canvas id="gauge-chart"></canvas>
+              <div style="font-family:'Share Tech Mono',monospace; font-size:0.8rem; color:var(--text-secondary); text-align:center;">
+                Risk Score: <span style="color:${riskColor}; font-size:1.4rem; font-weight:bold;">${summary.overall_score}</span>/100
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cookie Table -->
+        <div class="card" style="margin-bottom:1.5rem;">
+          <div class="card-header">
+            <span class="card-title">Cookie Security Analysis</span>
+            <span style="font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:var(--text-dim);">${cookies.length} cookies found</span>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="cookie-table">
+              <thead>
+                <tr>
+                  <th>Cookie Name</th>
+                  <th>Type</th>
+                  <th>HttpOnly</th>
+                  <th>Secure</th>
+                  <th>SameSite</th>
+                  <th>Entropy</th>
+                  <th>Risk</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${cookies.length ? cookies.map(c => `
+                  <tr>
+                    <td style="color:var(--text-primary); font-family:'Share Tech Mono',monospace;">${escHtml(c.name)}</td>
+                    <td><span class="sev-badge ${c.is_session ? 'sev-HIGH' : 'sev-INFO'}">${c.is_session ? 'SESSION' : 'OTHER'}</span></td>
+                    <td><span class="flag ${c.httponly ? 'ok' : 'fail'}">${c.httponly ? '✓' : '✗'}</span></td>
+                    <td><span class="flag ${c.secure   ? 'ok' : 'fail'}">${c.secure   ? '✓' : '✗'}</span></td>
+                    <td style="font-family:'Share Tech Mono',monospace; font-size:0.75rem; color:${c.samesite && c.samesite !== 'Not Set' ? 'var(--green)' : 'var(--red)'};">${escHtml(c.samesite)}</td>
+                    <td style="font-family:'Share Tech Mono',monospace;">${c.entropy}</td>
+                    <td><span class="sev-badge ${c.risk_score >= 60 ? 'sev-HIGH' : c.risk_score >= 30 ? 'sev-MEDIUM' : 'sev-LOW'}">${c.risk_score}</span></td>
+                  </tr>
+                `).join('') : `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--text-dim);">No cookies found</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Findings Table -->
+        <div class="card" style="margin-bottom:1.5rem;">
+          <div class="card-header">
+            <span class="card-title">Vulnerability Findings</span>
+            <span style="font-family:'Share Tech Mono',monospace; font-size:0.7rem; color:var(--text-dim);">${findings.length} issues detected</span>
+          </div>
+          <div style="overflow-x:auto;">
+            <table class="findings-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Vulnerability</th>
+                  <th>Severity</th>
+                  <th>Remediation</th>
+                  <th>OWASP</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${findings.length ? findings.map((f, i) => `
+                  <tr>
+                    <td style="font-family:'Share Tech Mono',monospace; color:var(--text-dim); font-size:0.75rem;">${String(i+1).padStart(2,'0')}</td>
+                    <td>
+                      <div class="vuln-name">${escHtml(f.check)}</div>
+                      <div class="vuln-desc">${escHtml(f.description)}</div>
+                    </td>
+                    <td><span class="sev-badge sev-${f.severity}">${f.severity}</span></td>
+                    <td><div class="remediation-text">${escHtml(f.remediation)}</div></td>
+                    <td><span class="owasp-ref">${escHtml(f.owasp)}</span></td>
+                  </tr>
+                `).join('') : `<tr><td colspan="5" style="text-align:center;padding:2rem;color:var(--green);">✓ No vulnerabilities detected</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Response Headers -->
+        <div class="card" style="margin-bottom:1.5rem;">
+          <div class="card-header">
+            <span class="card-title">HTTP Response Headers</span>
+          </div>
+          <div class="card-body">
+            ${Object.entries(headers).slice(0, 20).map(([k,v]) => `
+              <div class="header-item">
+                <span class="header-key">${escHtml(k)}</span>
+                <span class="header-value">${escHtml(String(v).substring(0,120))}${String(v).length > 120 ? '...' : ''}</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- Page Meta -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Page Analysis</span>
+          </div>
+          <div class="card-body" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1rem;">
+            ${[
+              ['Page Title', meta.title || '—'],
+              ['Forms Found', meta.forms],
+              ['Scripts Found', meta.scripts],
+              ['Inline Scripts', meta.inline_scripts],
+              ['iFrames', meta.iframes],
+              ['External Links', meta.external_links],
+            ].map(([label, val]) => `
+              <div style="text-align:center; padding:1rem; background:rgba(0,212,255,0.02); border-radius:6px; border:1px solid var(--border);">
+                <div style="font-family:'Share Tech Mono',monospace; font-size:1.4rem; color:var(--cyan); margin-bottom:4px;">${val}</div>
+                <div style="font-size:0.7rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px;">${label}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+      // Render charts after DOM is updated
+      setTimeout(() => {
+        renderCharts(d);
+      }, 100);
+    }
+
+    // ─────────────────────────────────────────
+    // Charts
+    // ─────────────────────────────────────────
+    function renderCharts(d) {
+      const summary = d.summary || {};
+      Chart.defaults.color = '#7aa0c4';
+      Chart.defaults.borderColor = '#0d2545';
+
+      // ── Donut Chart ──
+      const donutCtx = document.getElementById('donut-chart');
+      if (donutCtx) {
+        new Chart(donutCtx, {
+          type: 'doughnut',
+          data: {
+            labels: ['High', 'Medium', 'Low'],
+            datasets: [{
+              data: [summary.high_count||0, summary.medium_count||0, summary.low_count||0],
+              backgroundColor: ['rgba(255,45,85,0.8)', 'rgba(255,107,53,0.8)', 'rgba(255,214,10,0.8)'],
+              borderColor: ['#ff2d55', '#ff6b35', '#ffd60a'],
+              borderWidth: 1,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            cutout: '65%',
+            plugins: {
+              legend: { position: 'bottom', labels: { padding: 12, font: { size: 11 } } }
+            }
+          }
+        });
+      }
+
+      // ── Bar Chart (Cookie Flags) ──
+      const barCtx = document.getElementById('bar-chart');
+      if (barCtx) {
+        const cookies = d.cookies?.cookies || [];
+        const total = cookies.length || 1;
+        const httponly = cookies.filter(c => c.httponly).length;
+        const secure   = cookies.filter(c => c.secure).length;
+        const samesite = cookies.filter(c => c.samesite && c.samesite !== 'Not Set').length;
+
+        new Chart(barCtx, {
+          type: 'bar',
+          data: {
+            labels: ['HttpOnly', 'Secure', 'SameSite'],
+            datasets: [
+              {
+                label: 'Secure',
+                data: [httponly, secure, samesite],
+                backgroundColor: 'rgba(0,255,136,0.5)',
+                borderColor: '#00ff88',
+                borderWidth: 1,
+              },
+              {
+                label: 'Insecure',
+                data: [total-httponly, total-secure, total-samesite],
+                backgroundColor: 'rgba(255,45,85,0.4)',
+                borderColor: '#ff2d55',
+                borderWidth: 1,
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+              x: { stacked: true, grid: { color: '#0d2545' } },
+              y: { stacked: true, grid: { color: '#0d2545' }, ticks: { stepSize: 1 } }
+            },
+            plugins: { legend: { position: 'bottom', labels: { padding: 10, font: { size: 10 } } } }
+          }
+        });
+      }
+
+      // ── Gauge (Doughnut as gauge) ──
+      const gaugeCtx = document.getElementById('gauge-chart');
+      if (gaugeCtx) {
+        const score = summary.overall_score || 0;
+        const color = score >= 70 ? '#ff2d55' : score >= 40 ? '#ff6b35' : score >= 20 ? '#ffd60a' : '#00ff88';
+
+        new Chart(gaugeCtx, {
+          type: 'doughnut',
+          data: {
+            datasets: [{
+              data: [score, 100 - score],
+              backgroundColor: [color + 'cc', 'rgba(13,37,69,0.3)'],
+              borderColor: [color, 'transparent'],
+              borderWidth: 1,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            circumference: 180,
+            rotation: -90,
+            cutout: '70%',
+            plugins: { legend: { display: false }, tooltip: { enabled: false } }
+          }
+        });
+      }
+    }
+
+    // ─────────────────────────────────────────
+    // Escape HTML
+    // ─────────────────────────────────────────
+    function escHtml(str) {
+      if (str === null || str === undefined) return '—';
+      return String(str)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+  </script>
+</body>
+</html>

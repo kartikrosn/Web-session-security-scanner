@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SessionGuard — Session Hijacking Detection System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Exo+2:wght@300;400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-primary:    #020812;
+      --bg-secondary:  #050e1f;
+      --bg-card:       #071428;
+      --border:        #0d2545;
+      --border-bright: #1a4080;
+      --cyan:          #00d4ff;
+      --cyan-dim:      #0099cc;
+      --green:         #00ff88;
+      --red:           #ff2d55;
+      --orange:        #ff6b35;
+      --yellow:        #ffd60a;
+      --text-primary:  #e8f4ff;
+      --text-secondary:#7aa0c4;
+      --text-dim:      #3a5a7c;
+      --glow-cyan:     0 0 20px rgba(0,212,255,0.3);
+      --glow-green:    0 0 20px rgba(0,255,136,0.3);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Exo 2', sans-serif;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Grid Background ─────────────────────── */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+    }
+
+    /* ── Animated radial glow ─────────────────── */
+    .hero-glow {
+      position: absolute;
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(0,212,255,0.06) 0%, transparent 70%);
+      border-radius: 50%;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      animation: pulse-glow 4s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes pulse-glow {
+      0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+      50%       { opacity: 1;   transform: translate(-50%, -50%) scale(1.1); }
+    }
+
+    /* ── Scanline effect ──────────────────────── */
+    .scanline {
+      position: fixed; inset: 0; z-index: 1;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,212,255,0.012) 2px,
+        rgba(0,212,255,0.012) 4px
+      );
+      pointer-events: none;
+    }
+
+    /* ── Navigation ───────────────────────────── */
+    nav {
+      position: relative; z-index: 10;
+      background: rgba(2, 8, 18, 0.85);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      padding: 0 2rem;
+      height: 60px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .nav-logo {
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700;
+      font-size: 1.4rem;
+      letter-spacing: 2px;
+      color: var(--cyan);
+      text-shadow: var(--glow-cyan);
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .nav-logo .logo-icon {
+      width: 32px; height: 32px;
+      border: 2px solid var(--cyan);
+      border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px;
+      box-shadow: var(--glow-cyan), inset 0 0 10px rgba(0,212,255,0.1);
+    }
+
+    .nav-links {
+      display: flex; gap: 2rem; align-items: center;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: color 0.2s;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 500;
+    }
+    .nav-links a:hover, .nav-links a.active { color: var(--cyan); }
+
+    .nav-badge {
+      background: rgba(0,212,255,0.1);
+      border: 1px solid var(--cyan-dim);
+      color: var(--cyan);
+      padding: 3px 10px;
+      border-radius: 3px;
+      font-size: 0.7rem;
+      font-family: 'Share Tech Mono', monospace;
+      letter-spacing: 1px;
+    }
+
+    /* ── Hero Section ─────────────────────────── */
+    .hero {
+      position: relative; z-index: 5;
+      min-height: calc(100vh - 60px);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      padding: 3rem 2rem;
+      text-align: center;
+    }
+
+    .hero-eyebrow {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 4px;
+      color: var(--cyan-dim);
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+      display: flex; align-items: center; gap: 12px;
+    }
+
+    .hero-eyebrow::before, .hero-eyebrow::after {
+      content: '';
+      height: 1px;
+      width: 60px;
+      background: linear-gradient(90deg, transparent, var(--cyan-dim));
+    }
+    .hero-eyebrow::after {
+      background: linear-gradient(90deg, var(--cyan-dim), transparent);
+    }
+
+    h1.hero-title {
+      font-family: 'Rajdhani', sans-serif;
+      font-size: clamp(2.4rem, 6vw, 4.5rem);
+      font-weight: 700;
+      line-height: 1.05;
+      letter-spacing: 2px;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, #ffffff 30%, var(--cyan) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-subtitle {
+      font-size: 1.05rem;
+      color: var(--text-secondary);
+      max-width: 560px;
+      line-height: 1.7;
+      margin-bottom: 2.5rem;
+    }
+
+    /* ── Scanner Card ─────────────────────────── */
+    .scanner-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 680px;
+      position: relative;
+      box-shadow: 0 0 40px rgba(0,212,255,0.08), 0 20px 60px rgba(0,0,0,0.5);
+    }
+
+    .scanner-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+      border-radius: 12px 12px 0 0;
+    }
+
+    .scanner-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 3px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      margin-bottom: 0.6rem;
+    }
+
+    .url-input-wrapper {
+      display: flex;
+      gap: 0;
+      margin-bottom: 1.2rem;
+    }
+
+    .url-prefix {
+      background: rgba(0,212,255,0.05);
+      border: 1px solid var(--border);
+      border-right: none;
+      color: var(--cyan-dim);
+      padding: 0 14px;
+      display: flex; align-items: center;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.8rem;
+      border-radius: 8px 0 0 8px;
+      white-space: nowrap;
+    }
+
+    .url-input {
+      flex: 1;
+      background: rgba(7, 20, 40, 0.8);
+      border: 1px solid var(--border);
+      border-left: none;
+      color: var(--text-primary);
+      padding: 14px 16px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .url-input:focus {
+      border-color: var(--cyan-dim);
+      box-shadow: 0 0 0 2px rgba(0,212,255,0.1);
+    }
+
+    .url-input::placeholder { color: var(--text-dim); }
+
+    .scan-btn {
+      background: linear-gradient(135deg, var(--cyan) 0%, #0066ff 100%);
+      border: none;
+      color: #000;
+      padding: 14px 28px;
+      border-radius: 0 8px 8px 0;
+      font-family: 'Rajdhani', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .scan-btn:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: var(--glow-cyan); }
+    .scan-btn:active { transform: translateY(0); }
+    .scan-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* ── Quick Targets ────────────────────────── */
+    .quick-targets {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      margin-top: 1rem;
+    }
+
+    .quick-target-btn {
+      background: rgba(0,212,255,0.04);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      font-family: 'Share Tech Mono', monospace;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .quick-target-btn:hover {
+      border-color: var(--cyan-dim);
+      color: var(--cyan);
+      background: rgba(0,212,255,0.08);
+    }
+
+    .demo-btn {
+      background: rgba(0,255,136,0.06);
+      border: 1px solid rgba(0,255,136,0.2);
+      color: var(--green);
+      padding: 6px 14px;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      font-family: 'Share Tech Mono', monospace;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .demo-btn:hover { background: rgba(0,255,136,0.12); }
+
+    /* ── Progress Bar ─────────────────────────── */
+    #scan-progress {
+      display: none;
+      margin-top: 1.5rem;
+    }
+
+    .progress-header {
+      display: flex; justify-content: space-between;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--cyan-dim);
+      margin-bottom: 8px;
+    }
+
+    .progress-bar-track {
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--cyan), #0066ff);
+      border-radius: 2px;
+      transition: width 0.4s ease;
+      width: 0%;
+      box-shadow: 0 0 8px var(--cyan);
+    }
+
+    .progress-steps {
+      display: flex; flex-direction: column; gap: 4px;
+      margin-top: 12px;
+    }
+
+    .step-item {
+      display: flex; align-items: center; gap: 8px;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      transition: color 0.3s;
+    }
+    .step-item.active { color: var(--cyan); }
+    .step-item.done   { color: var(--green); }
+
+    .step-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      transition: all 0.3s;
+      flex-shrink: 0;
+    }
+    .step-item.active .step-dot { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+    .step-item.done   .step-dot { background: var(--green); }
+
+    /* ── Error Box ───────────────────────────── */
+    #error-box {
+      display: none;
+      background: rgba(255,45,85,0.08);
+      border: 1px solid rgba(255,45,85,0.3);
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-top: 1rem;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.8rem;
+      color: var(--red);
+    }
+
+    /* ── Stats Row ────────────────────────────── */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 3rem;
+      max-width: 680px;
+      width: 100%;
+    }
+
+    .stat-cell {
+      background: var(--bg-card);
+      padding: 1.2rem;
+      text-align: center;
+    }
+
+    .stat-number {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--cyan);
+      display: block;
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .stat-label {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* ── Feature Badges ───────────────────────── */
+    .features-row {
+      display: flex; flex-wrap: wrap; justify-content: center;
+      gap: 10px;
+      margin-top: 2.5rem;
+      max-width: 680px;
+    }
+
+    .feature-badge {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(7, 20, 40, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+    }
+    .feature-badge .dot {
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 4px var(--green);
+    }
+
+    /* ── Footer ───────────────────────────────── */
+    footer {
+      position: relative; z-index: 5;
+      border-top: 1px solid var(--border);
+      padding: 1.2rem 2rem;
+      text-align: center;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+
+    /* Blinking cursor */
+    .blink { animation: blink 1s step-end infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+    /* Typing effect */
+    .typing-text {
+      overflow: hidden;
+      white-space: nowrap;
+      animation: typing 2s steps(40, end) forwards;
+    }
+    @keyframes typing {
+      from { width: 0; }
+      to   { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="scanline"></div>
+
+  <!-- Navigation -->
+  <nav>
+    <div class="nav-logo">
+      <div class="logo-icon">⬡</div>
+      SESSION<span style="color:var(--text-secondary)">GUARD</span>
+    </div>
+    <div class="nav-links">
+      <a href="/" class="active">Scanner</a>
+      <a href="/dashboard">Dashboard</a>
+      <a href="/report">Report</a>
+      <span class="nav-badge">v1.0.0</span>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-glow"></div>
+
+    <div class="hero-eyebrow">
+      OWASP A07:2021 · Session Security Testing
+    </div>
+
+    <h1 class="hero-title">
+      Session Hijacking<br/>Detection System
+    </h1>
+
+    <p class="hero-subtitle">
+      Analyze web applications for session management vulnerabilities including
+      cookie misconfigurations, insecure transmission, and session fixation risks.
+    </p>
+
+    <!-- Scanner Card -->
+    <div class="scanner-card">
+      <div class="scanner-label">// TARGET URL</div>
+
+      <div class="url-input-wrapper">
+        <div class="url-prefix">TARGET ›</div>
+        <input
+          type="text"
+          id="url-input"
+          class="url-input"
+          placeholder="https://example.com"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button class="scan-btn" id="scan-btn" onclick="startScan()">
+          SCAN ▶
+        </button>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <div>
+          <div class="scanner-label" style="margin-bottom:6px;">// QUICK TARGETS</div>
+          <div class="quick-targets">
+            <button class="quick-target-btn" onclick="setUrl('https://httpbin.org')">httpbin.org</button>
+            <button class="quick-target-btn" onclick="setUrl('http://testphp.vulnweb.com')">testphp.vulnweb.com</button>
+            <button class="quick-target-btn" onclick="setUrl('https://example.com')">example.com</button>
+            <button class="demo-btn" onclick="runDemo()">⚡ DEMO MODE</button>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div class="scanner-label" style="margin-bottom:6px;">// STATUS</div>
+          <div style="font-family:'Share Tech Mono',monospace; font-size:0.75rem; color:var(--green);">
+            ● ONLINE <span class="blink">_</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Progress -->
+      <div id="scan-progress">
+        <div class="progress-header">
+          <span id="progress-msg">Initializing scanner...</span>
+          <span id="progress-pct">0%</span>
+        </div>
+        <div class="progress-bar-track">
+          <div class="progress-bar-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-steps" id="progress-steps">
+          <div class="step-item" data-step="1"><div class="step-dot"></div>Validating URL</div>
+          <div class="step-item" data-step="2"><div class="step-dot"></div>Checking SSL/TLS Certificate</div>
+          <div class="step-item" data-step="3"><div class="step-dot"></div>Sending HTTP Request</div>
+          <div class="step-item" data-step="4"><div class="step-dot"></div>Extracting Cookies</div>
+          <div class="step-item" data-step="5"><div class="step-dot"></div>Analyzing Session Security</div>
+          <div class="step-item" data-step="6"><div class="step-dot"></div>Generating Vulnerability Report</div>
+        </div>
+      </div>
+
+      <!-- Error -->
+      <div id="error-box"></div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="stats-row">
+      <div class="stat-cell">
+        <span class="stat-number">10+</span>
+        <span class="stat-label">Vuln Checks</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-number">OWASP</span>
+        <span class="stat-label">Compliant</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-number">3</span>
+        <span class="stat-label">Risk Levels</span>
+      </div>
+      <div class="stat-cell">
+        <span class="stat-number">100%</span>
+        <span class="stat-label">Free & Open</span>
+      </div>
+    </div>
+
+    <!-- Feature Badges -->
+    <div class="features-row">
+      <div class="feature-badge"><div class="dot"></div>Cookie Flag Analysis</div>
+      <div class="feature-badge"><div class="dot"></div>Session Fixation Detection</div>
+      <div class="feature-badge"><div class="dot"></div>Transport Security</div>
+      <div class="feature-badge"><div class="dot"></div>Entropy Analysis</div>
+      <div class="feature-badge"><div class="dot"></div>Header Security</div>
+      <div class="feature-badge"><div class="dot"></div>CSRF Protection Check</div>
+    </div>
+  </section>
+
+  <footer>
+     Cybersecurity Project · Devloped by Kartik . 
+  </footer>
+
+  <script>
+    // ─────────────────────────────────────────
+    // URL Helper
+    // ─────────────────────────────────────────
+    function setUrl(url) {
+      document.getElementById('url-input').value = url;
+      document.getElementById('url-input').focus();
+    }
+
+    // Enter key support
+    document.getElementById('url-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') startScan();
+    });
+
+    // ─────────────────────────────────────────
+    // Demo Mode
+    // ─────────────────────────────────────────
+    function runDemo() {
+      document.getElementById('url-input').value = 'http://demo.vulnerable-app.local';
+      startScan(true);
+    }
+
+    // ─────────────────────────────────────────
+    // Progress UI
+    // ─────────────────────────────────────────
+    function updateProgress(step, total, message) {
+      const pct = Math.round((step / total) * 100);
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-pct').textContent  = pct + '%';
+      document.getElementById('progress-msg').textContent  = message;
+
+      document.querySelectorAll('.step-item').forEach(el => {
+        const s = parseInt(el.dataset.step);
+        el.classList.remove('active', 'done');
+        if (s < step)  el.classList.add('done');
+        if (s === step) el.classList.add('active');
+      });
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error-box');
+      el.textContent = '⚠ ' + msg;
+      el.style.display = 'block';
+    }
+
+    function hideError() {
+      document.getElementById('error-box').style.display = 'none';
+    }
+
+    // ─────────────────────────────────────────
+    // Main Scan Trigger
+    // ─────────────────────────────────────────
+    async function startScan(isDemo = false) {
+      const url = document.getElementById('url-input').value.trim();
+      if (!url && !isDemo) {
+        showError('Please enter a target URL.');
+        return;
+      }
+
+      hideError();
+      document.getElementById('scan-progress').style.display = 'block';
+      document.getElementById('scan-btn').disabled = true;
+      document.getElementById('scan-btn').textContent = 'SCANNING...';
+
+      // Use SSE streaming endpoint
+      const scanUrl  = isDemo ? (url || 'http://demo.local') : url;
+
+      try {
+        const response = await fetch('/api/scan/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: scanUrl, demo: isDemo }),
+        });
+
+        const reader  = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer    = '';
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // Keep incomplete line
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const event = JSON.parse(line.slice(6));
+
+              if (event.type === 'progress') {
+                updateProgress(event.step, event.total, event.message);
+              } else if (event.type === 'error') {
+                showError(event.message);
+                resetBtn();
+              } else if (event.type === 'complete') {
+                updateProgress(6, 6, 'Scan complete!');
+                // Store result and redirect
+                sessionStorage.setItem('scanResult', JSON.stringify(event.result));
+                setTimeout(() => {
+                  window.location.href = '/dashboard';
+                }, 600);
+              }
+            } catch (e) { /* ignore parse errors */ }
+          }
+        }
+      } catch (err) {
+        showError('Connection error: ' + err.message);
+        resetBtn();
+      }
+    }
+
+    function resetBtn() {
+      const btn = document.getElementById('scan-btn');
+      btn.disabled = false;
+      btn.textContent = 'SCAN ▶';
+    }
+  </script>
+</body>
+</html>
